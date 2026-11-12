@@ -168,6 +168,41 @@ class SkillAndCommandCheckTests(LinterRepoFixture):
         self.assertEqual(result.returncode, 1)
         self.assertIn("must start with a '# /<name>' title", result.stdout)
 
+    def test_adapter_missing_canonical_target_fails(self):
+        adapter = self.root / ".agents" / "skills" / "example" / "SKILL.md"
+        adapter.parent.mkdir(parents=True)
+        adapter.write_text(
+            "---\n"
+            "name: example\n"
+            "description: Example adapter\n"
+            "---\n"
+            "Read and follow `.claude/commands/missing.md` in full.\n",
+            encoding="utf-8",
+        )
+
+        result = run_linter(self.root)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("canonical target does not exist", result.stdout)
+
+    def test_adapter_target_and_name_pass(self):
+        target = self.root / ".claude" / "commands" / "example.md"
+        target.write_text("# /example\n", encoding="utf-8")
+        adapter = self.root / ".agents" / "skills" / "example" / "SKILL.md"
+        adapter.parent.mkdir(parents=True)
+        adapter.write_text(
+            "---\n"
+            "name: example\n"
+            "description: Example adapter\n"
+            "---\n"
+            "Read and follow `.claude/commands/example.md` in full.\n",
+            encoding="utf-8",
+        )
+
+        result = run_linter(self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

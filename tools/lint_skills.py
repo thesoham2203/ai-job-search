@@ -6,6 +6,8 @@ Run from anywhere: python tools/lint_skills.py
 Checks:
 - Every SKILL.md (.claude/skills/*, .agents/skills/*) has YAML frontmatter that
   parses, with non-empty `name` and `description` keys
+- Every .agents/skills/*/SKILL.md adapter points to an existing canonical file
+  when it declares a `Read and follow` target
 - `allowed-tools` entries of the form `Bash(bun run <path> *)` point at files
   that exist (skill paths resolve relative to the repo root and to .agents/)
 - Every .claude/commands/*.md starts with a `# /<name>` title
@@ -77,6 +79,18 @@ def check_command(path: Path) -> None:
         errors.append(f"{rel(path)}: command file must start with a '# /<name>' title (found: {first[:50]!r})")
 
 
+def check_adapter(path: Path) -> None:
+    expected_name = path.parent.name
+    text = path.read_text(encoding="utf-8")
+    if re.search(rf"^name:\s*{re.escape(expected_name)}\s*$", text, re.MULTILINE) is None:
+        errors.append(f"{rel(path)}: frontmatter name must match directory '{expected_name}'")
+
+    targets = re.findall(r"Read and follow `([^`]+)`", text)
+    for target in targets:
+        if not (ROOT / target).is_file():
+            errors.append(f"{rel(path)}: canonical target does not exist: {target}")
+
+
 def check_settings() -> None:
     path = ROOT / ".claude" / "settings.json"
     try:
@@ -96,7 +110,9 @@ def check_settings() -> None:
 
 
 def main() -> int:
-    skills = sorted(ROOT.glob(".claude/skills/*/SKILL.md")) + sorted(ROOT.glob(".agents/skills/*/SKILL.md"))
+    canonical_skills = sorted(ROOT.glob(".claude/skills/*/SKILL.md"))
+    adapters = sorted(ROOT.glob(".agents/skills/*/SKILL.md"))
+    skills = canonical_skills + adapters
     commands = sorted((ROOT / ".claude" / "commands").glob("*.md"))
     if not skills:
         errors.append("no SKILL.md files found - glob roots are wrong or the tree moved")
@@ -105,6 +121,8 @@ def main() -> int:
 
     for skill in skills:
         check_skill(skill)
+    for adapter in adapters:
+        check_adapter(adapter)
     for command in commands:
         check_command(command)
     check_settings()
